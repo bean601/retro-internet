@@ -14,29 +14,6 @@ var _imageCache = new MemoryCache(new MemoryCacheOptions() { });
 var _htmlCache = new MemoryCache(new MemoryCacheOptions() { });
 var _badResultsCache = new MemoryCache(new MemoryCacheOptions() { });
 
-static string ReplaceArchiveUrlWithUserUrl(string userUrl, string archiveUrl)
-{
-    // Find the last occurrence of "http://" or "https://" to ensure we only replace the final URL.
-    int lastHttpIndex = Math.Max(archiveUrl.LastIndexOf("http://"), archiveUrl.LastIndexOf("https://"));
-    if (lastHttpIndex == -1)
-    {
-        throw new ArgumentException("Invalid archive URL format.");
-    }
-
-    // Find the end of the domain in the archive URL starting from the last http/https index found.
-    int domainEndIndex = archiveUrl.IndexOf("/", lastHttpIndex + 8); // +8 to skip the http:// or https:// part
-    if (domainEndIndex == -1)
-    {
-        // If no trailing slash is found, use the whole string.
-        domainEndIndex = archiveUrl.Length;
-    }
-
-    // Replace the domain in the archive URL with the user URL.
-    string resultUrl = archiveUrl.Substring(0, lastHttpIndex) + userUrl + archiveUrl.Substring(domainEndIndex);
-
-    return resultUrl;
-}
-
 async Task<IResult> ProxyWaybackPage(HttpContext context, string path, HttpClient httpClient, Dictionary<string, (string Url, bool DefaultRouteDefined)> domainMappings)
 {
     path = path.ToLower();
@@ -55,7 +32,7 @@ async Task<IResult> ProxyWaybackPage(HttpContext context, string path, HttpClien
     {
         await BlinkLedAsync(gpioController, Speed.Medium, ledCancellationToken);
 
-        var devHost = "http://localhost:7077";
+        var devHost = "http://localhost:5271";
 
 #if DEBUG
         //remove local debugging host
@@ -75,6 +52,8 @@ async Task<IResult> ProxyWaybackPage(HttpContext context, string path, HttpClien
         }
 
         var url = string.Empty;
+
+        //TODO: extract the root domain here to find mapping
 
         if (domainMappings.TryGetValue(path, out var foundMapping))
         {
@@ -135,11 +114,9 @@ async Task<IResult> ProxyWaybackPage(HttpContext context, string path, HttpClien
                 {
                     var srcAttr = node.Attributes["src"];
 
-                    var hrefAttr = node.Attributes["href"];
-
                     if (srcAttr != null && IsImageUrl(attribute.Value))
                     {
-                        attribute.Value = $"{srcAttr.Value}";
+                        attribute.Value = attribute.Value; //todo: swap this out
 #if DEBUG
                         attribute.Value = $"{devHost}/{srcAttr}";
 #endif
@@ -148,11 +125,11 @@ async Task<IResult> ProxyWaybackPage(HttpContext context, string path, HttpClien
                     else
                     {
 
-                        attribute.Value = $"{attribute.Value}";
+                        
+                        attribute.Value = ExtractUrl(attribute.Value);
 #if DEBUG
                         attribute.Value = $"{devHost}/{attribute.Value}";
 #endif
-
                     }
                 }
             }
@@ -165,8 +142,6 @@ async Task<IResult> ProxyWaybackPage(HttpContext context, string path, HttpClien
         _htmlCache.Set($"{context.Request.Host.Host}.{path}", returnString);
 
         return returnString;
-
-        return Results.BadRequest();
     }
     catch (Exception ex)
     {
@@ -198,6 +173,19 @@ async Task<IResult> ProxyWaybackPage(HttpContext context, string path, HttpClien
 
         sw.Stop();
     }
+}
+
+string ExtractUrl(string archiveUrl)
+{
+    var lastIndexOfHttp = archiveUrl.ToLower().LastIndexOf("http") + 4;
+    if (archiveUrl[lastIndexOfHttp + 1].ToString().ToLower() == "s")
+    {
+        lastIndexOfHttp++;
+    }
+
+    lastIndexOfHttp = lastIndexOfHttp + 3; // colon and two slashes
+
+    return archiveUrl.Substring(lastIndexOfHttp, archiveUrl.Length - lastIndexOfHttp);
 }
 
 bool IsImageUrl(string url)
@@ -274,11 +262,14 @@ void TurnOffBothLedsAsync(GpioController controller)
     }
 }
 
-static void WriteDebugMessage(string stringToPrint, Stopwatch stopwatch)
+static void WriteDebugMessage(string stringToPrint, Stopwatch stopwatch = null)
 {
-    var ms = stopwatch == null ? -1 : stopwatch?.ElapsedMilliseconds;
+    if (stopwatch != null)
+    {
+        var ms = stopwatch == null ? -1 : stopwatch?.ElapsedMilliseconds;
+        stringToPrint = $"{DateTime.Now.ToString()} - {stringToPrint}. Elapsed ms = {ms}";
+    }
 
-    stringToPrint = $"{DateTime.Now.ToString()} - {stringToPrint}. Elapsed ms = {ms}";
     Console.WriteLine(stringToPrint);
     Debug.WriteLine(stringToPrint);
 }
