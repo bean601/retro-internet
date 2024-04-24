@@ -18,6 +18,19 @@ async Task<IResult> ProxyWaybackPage(HttpContext context, string path, HttpClien
 {
     path = path.ToLower();
 
+    bool skipMapping = false;
+
+    if (path.Contains("web-static"))
+    {
+        path = path.TrimStart('/');
+        skipMapping = true;
+
+        if (!path.StartsWith("http"))
+        {
+            path = $"http://{path}";
+        }
+    }
+
     var sw = new Stopwatch();
     sw.Start();
 
@@ -40,6 +53,10 @@ async Task<IResult> ProxyWaybackPage(HttpContext context, string path, HttpClien
         {
             path = path.Remove(0, devHost.Length);
         }
+        if (path.ToLower().StartsWith(devHost.Substring(devHost.LastIndexOf('/'), devHost.Length - devHost.LastIndexOf('/'))))
+        {
+            path = path.Remove(0, devHost.Length);
+        }
 #endif
 
         //if we've already had a failure on this path, don't try again
@@ -51,28 +68,65 @@ async Task<IResult> ProxyWaybackPage(HttpContext context, string path, HttpClien
             }
         }
 
+        if (IsImageUrl(path))
+        {
+            if (_imageCache.TryGetValue(path, out string imageArchiveUrl)) 
+            {
+                var imgResponse = await httpClient.GetAsync(imageArchiveUrl);
+                if (!imgResponse.IsSuccessStatusCode)
+                {
+                    // Example function call - assuming you have this implemented for indicating issues
+                    await BlinkLedAsync(gpioController, Speed.Fast, ledCancellationToken);
+                    await Task.Delay(500);
+
+                    // Log the bad result for this URL
+                    _badResultsCache.Set(path, false);
+
+                    return Results.BadRequest(); // Send a 400 Bad Request response
+                }
+                else
+                {
+                    var imageData = await imgResponse.Content.ReadAsByteArrayAsync();
+
+                    // Return the image data with the correct content type
+                    // Assuming the content type can be derived from the response or a predetermined value can be used
+                    var contentType = imgResponse.Content.Headers.ContentType?.MediaType ?? "image/png";
+                    return Results.File(imageData, contentType);
+                }
+            }
+        }
+
         var url = string.Empty;
 
         //TODO: extract the root domain here to find mapping
 
-        if (domainMappings.TryGetValue(path, out var foundMapping))
+        var rootPath = GetDomainFromUrl(path);
+
+        if (!skipMapping)
         {
-            if (foundMapping.Url == null)
+            if (domainMappings.TryGetValue(rootPath, out var foundMapping))
             {
-                WriteDebugMessage($"Could not find mapping for path  {path}", sw);
+                if (foundMapping.Url == null)
+                {
+                    WriteDebugMessage($"Could not find mapping for path  {path}", sw);
+                    await BlinkLedAsync(gpioController, Speed.Fast, ledCancellationToken, true);
+
+                    return Results.NotFound("Domain mapping was null.");
+                }
+
+                url = $"{foundMapping.Url}{path}";
+            }
+            else
+            {
+                WriteDebugMessage($"Could not find mapping for path {path}", sw);
                 await BlinkLedAsync(gpioController, Speed.Fast, ledCancellationToken, true);
 
-                return Results.NotFound("Domain mapping was null.");
+                return Results.NotFound($"Could not find mapping for path {path}");
             }
-
-            url = $"{foundMapping.Url}{path}";
         }
         else
         {
-            WriteDebugMessage($"Could not find mapping for path {path}", sw);
-            await BlinkLedAsync(gpioController, Speed.Fast, ledCancellationToken, true);
-
-            return Results.NotFound($"Could not find mapping for path {path}");
+            url = path;
         }
 
         WriteDebugMessage($"URL - {url}, LOADING...", sw);
@@ -116,9 +170,11 @@ async Task<IResult> ProxyWaybackPage(HttpContext context, string path, HttpClien
 
                     if (srcAttr != null && IsImageUrl(attribute.Value))
                     {
-                        attribute.Value = attribute.Value; //todo: swap this out
+                        var originalValue = attribute.Value;
+                        attribute.Value = ExtractUrl(srcAttr.Value);
+                        _imageCache.Set(attribute.Value, originalValue);
 #if DEBUG
-                        attribute.Value = $"{devHost}/{srcAttr}";
+                        attribute.Value = $"{devHost}/{ExtractUrl(srcAttr.Value)}";
 #endif
 
                     }
@@ -128,7 +184,7 @@ async Task<IResult> ProxyWaybackPage(HttpContext context, string path, HttpClien
                         
                         attribute.Value = ExtractUrl(attribute.Value);
 #if DEBUG
-                        attribute.Value = $"{devHost}/{attribute.Value}";
+                        attribute.Value = $"{devHost}/{ExtractUrl(attribute.Value)}";
 #endif
                     }
                 }
@@ -174,10 +230,40 @@ async Task<IResult> ProxyWaybackPage(HttpContext context, string path, HttpClien
         sw.Stop();
     }
 }
-
-string ExtractUrl(string archiveUrl)
+static string GetDomainFromUrl(string url)
 {
-    var lastIndexOfHttp = archiveUrl.ToLower().LastIndexOf("http") + 4;
+    // Add protocol if missing. This helps Uri parse the URL correctly in all cases.
+    if (!url.StartsWith("http://") && !url.StartsWith("https://"))
+    {
+        url = "http://" + url;
+    }
+
+    Uri uri = new Uri(url);
+    string domain = uri.Host;
+
+    // If the domain has subdomains, remove them.
+    if (domain.Split('.').Length > 2)
+    {
+        int lastIndex = domain.LastIndexOf(".");
+        int index = domain.LastIndexOf(".", lastIndex - 1);
+        domain = domain.Substring(index + 1);
+    }
+
+    return domain.ToLower();
+}
+
+static string ExtractUrl(string archiveUrl)
+{
+    var lastIndexOfHttp = archiveUrl.ToLower().LastIndexOf("http");
+
+    if (lastIndexOfHttp < 0)
+    {
+        //return string.Empty;
+        return archiveUrl;
+    }
+
+    lastIndexOfHttp = lastIndexOfHttp + 4; //cover http
+
     if (archiveUrl[lastIndexOfHttp + 1].ToString().ToLower() == "s")
     {
         lastIndexOfHttp++;
