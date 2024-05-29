@@ -1,9 +1,0 @@
-yahoo.com,https://web.archive.org/web/19980705025730/,false
-gamespot.com,https://web.archive.org/web/19991012194738/,false
-davematthewsband.com,https://web.archive.org/web/19991128041459/,true
-msn.com,https://web.archive.org/web/19991128100812/,false
-microsoft.com,https://web.archive.org/web/19991013021617/,true
-aol.com,https://web.archive.org/web/19991012151327/,false
-ebay.com,https://web.archive.org/web/19990420081856/,false
-cnet.com,https://web.archive.org/web/19991126082056/,false
-ign.com,https://web.archive.org/web/19991106010657/,false

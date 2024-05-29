@@ -5,6 +5,8 @@ using System.Device.Gpio;
 using System.Net;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Caching.Memory;
+using retro_internet;
+using System.Text.Json;
 
 bool _greenLEDOn = false;
 bool _redLEDOn = false;
@@ -68,31 +70,28 @@ async Task<IResult> ProxyWaybackPage(HttpContext context, string path, HttpClien
             }
         }
 
-        if (IsImageUrl(path))
+        if (IsImageUrl(path) && _imageCache.TryGetValue(path, out string imageArchiveUrl))
         {
-            if (_imageCache.TryGetValue(path, out string imageArchiveUrl)) 
+            var imgResponse = await httpClient.GetAsync(imageArchiveUrl);
+            if (!imgResponse.IsSuccessStatusCode)
             {
-                var imgResponse = await httpClient.GetAsync(imageArchiveUrl);
-                if (!imgResponse.IsSuccessStatusCode)
-                {
-                    // Example function call - assuming you have this implemented for indicating issues
-                    await BlinkLedAsync(gpioController, Speed.Fast, ledCancellationToken);
-                    await Task.Delay(500);
+                // Example function call - assuming you have this implemented for indicating issues
+                await BlinkLedAsync(gpioController, Speed.Fast, ledCancellationToken);
+                await Task.Delay(500);
 
-                    // Log the bad result for this URL
-                    _badResultsCache.Set(path, false);
+                // Log the bad result for this URL
+                _badResultsCache.Set(path, false);
 
-                    return Results.BadRequest(); // Send a 400 Bad Request response
-                }
-                else
-                {
-                    var imageData = await imgResponse.Content.ReadAsByteArrayAsync();
+                return Results.BadRequest(); // Send a 400 Bad Request response
+            }
+            else
+            {
+                var imageData = await imgResponse.Content.ReadAsByteArrayAsync();
 
-                    // Return the image data with the correct content type
-                    // Assuming the content type can be derived from the response or a predetermined value can be used
-                    var contentType = imgResponse.Content.Headers.ContentType?.MediaType ?? "image/png";
-                    return Results.File(imageData, contentType);
-                }
+                // Return the image data with the correct content type
+                // Assuming the content type can be derived from the response or a predetermined value can be used
+                var contentType = imgResponse.Content.Headers.ContentType?.MediaType ?? "image/png";
+                return Results.File(imageData, contentType);
             }
         }
 
@@ -176,12 +175,11 @@ async Task<IResult> ProxyWaybackPage(HttpContext context, string path, HttpClien
 #if DEBUG
                         attribute.Value = $"{devHost}/{ExtractUrl(srcAttr.Value)}";
 #endif
-
                     }
                     else
                     {
 
-                        
+
                         attribute.Value = ExtractUrl(attribute.Value);
 #if DEBUG
                         attribute.Value = $"{devHost}/{ExtractUrl(attribute.Value)}";
@@ -360,44 +358,106 @@ static void WriteDebugMessage(string stringToPrint, Stopwatch stopwatch = null)
     Debug.WriteLine(stringToPrint);
 }
 
+
+
+
+
+//
 //
 //Startup code
 //
+//
+
+var mappingFilePath = "domainMappings.json";
 
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 
 var httpClient = new HttpClient();
 
-// Assuming 'domainMappings.txt' is in the root directory of your project.
-var domainMappingsPath = Path.Combine(Directory.GetCurrentDirectory(), "domainMappings.txt");
+var domainMappings = GetDomainMappings(mappingFilePath);
 
-var domainMappings = File.ReadAllLines(domainMappingsPath)
-    .Select(line => {
-        var parts = line.Split(',');
-        // Ensure there are at least 3 parts: domain, URL, and boolean flag
-        if (parts.Length < 3) throw new FormatException("Invalid line format in domainMappings.txt");
-
-        // Parse the boolean value; default to false if parsing fails
-        bool flag = bool.TryParse(parts[2], out bool parsedFlag) ? parsedFlag : false;
-
-        // Return a tuple or a custom object containing the domain, URL, and boolean flag
-        return new { Domain = parts[0].ToLower(), Url = parts[1].ToLower(), Flag = flag };
-    })
-    // Convert the sequence of anonymous objects into a dictionary
-    .ToDictionary(item => item.Domain, item => (item.Url, item.Flag));
-
+foreach (var entry in domainMappings)
+{
+    Console.WriteLine($"Domain: {entry.Key}, Archive URL: {entry.Value.Item1}, SkipRootPage: {entry.Value.Item2}");
+}
 
 //
 //Endpoints
 //
 
+app.MapGet("/admin", () => Results.File(Path.Combine(Directory.GetCurrentDirectory(), "admin.html"), "text/html"));
+
+//admin endpoints
+app.MapGet("/entries", async () =>
+{
+    if (!File.Exists(mappingFilePath))
+    {
+        return Results.NotFound();
+    }
+
+    var json = await File.ReadAllTextAsync(mappingFilePath);
+    var entries = JsonSerializer.Deserialize<List<WebEntry>>(json);
+    return Results.Ok(entries);
+});
+
+app.MapPost("/entries", async (WebEntry newEntry) =>
+{
+    List<WebEntry> entries;
+
+    if (File.Exists(mappingFilePath))
+    {
+        var json = await File.ReadAllTextAsync(mappingFilePath);
+        entries = JsonSerializer.Deserialize<List<WebEntry>>(json);
+    }
+    else
+    {
+        entries = new List<WebEntry>();
+    }
+
+    entries.Add(newEntry);
+    var updatedJson = JsonSerializer.Serialize(entries);
+    await File.WriteAllTextAsync(mappingFilePath, updatedJson);
+
+    domainMappings = GetDomainMappings(mappingFilePath);
+
+    return Results.Ok(newEntry);
+});
+
+app.MapPut("/entries", async (WebEntry updatedEntry) =>
+{
+    if (!File.Exists(mappingFilePath))
+    {
+        return Results.NotFound();
+    }
+
+    var json = await File.ReadAllTextAsync(mappingFilePath);
+    var entries = JsonSerializer.Deserialize<List<WebEntry>>(json);
+
+    var entry = entries.Find(e => e.Url == updatedEntry.Url);
+    if (entry == null)
+    {
+        return Results.NotFound();
+    }
+
+    entry.ArchiveUrl = updatedEntry.ArchiveUrl;
+    entry.SkipRootPage = updatedEntry.SkipRootPage;
+
+    var updatedJson = JsonSerializer.Serialize(entries);
+    await File.WriteAllTextAsync(mappingFilePath, updatedJson);
+
+    domainMappings = GetDomainMappings(mappingFilePath);
+
+    return Results.Ok(updatedEntry);
+});
+
+//proxy endpoints
 app.MapGet("/waybackproxyredirect", async (HttpContext context, string url) =>
 {
     // Decode and parse the original URL to extract the domain and path
     // Then redirect or proxy to the Wayback Machine content as before
     // This logic would be similar to your existing ProxyWaybackPage method
-    return Results.Redirect($"/{url}");   
+    return Results.Redirect($"/{url}");
 });
 
 app.MapGet("", async (HttpContext context) =>
@@ -410,10 +470,21 @@ app.MapGet("/{**path}", async (HttpContext context, string path) =>
     return await ProxyWaybackPage(context, path, httpClient, domainMappings);
 });
 
-
 //Run it
 app.Run();
 
+static Dictionary<string, (string, bool SkipRootPage)> GetDomainMappings(string mappingFilePath)
+{
+    var domainMappingsPath = Path.Combine(Directory.GetCurrentDirectory(), mappingFilePath);
+
+    // Read the JSON file
+    var json = File.ReadAllText(domainMappingsPath);
+
+    // Parse the JSON file
+    var domainMappings = JsonSerializer.Deserialize<List<WebEntry>>(json)
+        .ToDictionary(item => item.Url.ToLower(), item => (item.ArchiveUrl.ToLower(), item.SkipRootPage));
+    return domainMappings;
+}
 
 public enum Speed
 {
@@ -432,8 +503,8 @@ public class GPIOAbstraction
 {
     GpioController gpioController = null;
 
-    public GpioController Controller 
-    { 
+    public GpioController Controller
+    {
         get
         {
             if (gpioController == null && RuntimeInformation.IsOSPlatform(OSPlatform.Linux))

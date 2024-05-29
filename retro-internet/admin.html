@@ -1,0 +1,72 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Page</title>
+</head>
+<body>
+    <h1>Admin Page</h1>
+    <div id="entries"></div>
+
+    <h2>Add New Entry</h2>
+    <form id="addForm">
+        <label>URL: <input type="text" id="newUrl"></label><br>
+        <label>Archive URL: <input type="text" id="newArchiveUrl"></label><br>
+        <label>Skip Root Page?: <input type="checkbox" id="newSkipRootPage"></label><br>
+        <button type="submit">Add Entry</button>
+    </form>
+
+    <h2>Update Entry</h2>
+    <form id="updateForm">
+        <label>URL: <input type="text" id="updateUrl"></label><br>
+        <label>New Archive URL: <input type="text" id="updateArchiveUrl"></label><br>
+        <label>Skip Root Page?: <input type="checkbox" id="updateSkipRootPage"></label><br>
+        <button type="submit">Update Entry</button>
+    </form>
+
+    <script>
+        async function fetchEntries() {
+            const response = await fetch('/entries');
+            const entries = await response.json();
+            const entriesDiv = document.getElementById('entries');
+            entriesDiv.innerHTML = '<h2>Entries</h2><ul>' + entries.map(entry =>
+                `<li>${entry.url} - ${entry.archiveUrl} - ${entry.skipRootPage}</li>`).join('') + '</ul>';
+        }
+
+        document.getElementById('addForm').onsubmit = async function(event) {
+            event.preventDefault();
+            const newEntry = {
+                url: document.getElementById('newUrl').value,
+                archiveUrl: document.getElementById('newArchiveUrl').value,
+                skipRootPage: document.getElementById('newSkipRootPage').checked
+            };
+            await fetch('/entries', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(newEntry)
+            });
+            fetchEntries();
+        };
+
+        document.getElementById('updateForm').onsubmit = async function(event) {
+            event.preventDefault();
+            const updatedEntry = {
+                url: document.getElementById('updateUrl').value,
+                archiveUrl: document.getElementById('updateArchiveUrl').value,
+                skipRootPage: document.getElementById('updateSkipRootPage').checked
+            };
+            await fetch('/entries', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(updatedEntry)
+            });
+            fetchEntries();
+        };
+
+        fetchEntries();
+    </script>
+</body>
+</html>
