@@ -4,6 +4,8 @@ Ever wondered what the internet was like in 1999? Wonder no more!
 
 This is a .NET Core web application that dynamically rewrites archive.org HTML pages, giving you that nostalgic dial-up browsing experience.
 
+It is designed to run on a Raspberry Pi (any version) and by default blinks LEDs on GPIO pins 27 (success and activity) and 17 (errors). It can run anywhere a function app can run though.
+
 ## Overview
 
 This project runs as a .NET Core web application under nginx on port 5000, with DNS manipulation handled by dnsmasq for a contained retro browsing environment.
