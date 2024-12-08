@@ -1,114 +1,82 @@
-# retro-internet
-Dynamically rewrites archive.org html pages
+# Retro Internet
 
-.net core web app running under nginx port 5000
+Ever wondered what the internet was like in 1999? Wonder no more!
 
+A .NET Core web application that dynamically rewrites archive.org HTML pages, providing a nostalgic browsing experience.
 
-dnsmasq - /etc/dnsmasq.conf
+## Overview
 
+This project runs as a .NET Core web application under nginx on port 5000, with DNS manipulation handled by dnsmasq to create a contained retro browsing environment.
 
-interface=eth0      # The interface dnsmasq should listen on.
+## System Components
+
+- .NET Core web application
+- nginx web server
+- dnsmasq for DNS manipulation
+
+## Configuration
+
+### DNSMasq Configuration
+
+Create or modify `/etc/dnsmasq.conf`:
+
+```conf
+# Interface configuration
+interface=eth0      # The interface dnsmasq should listen on
+
+# DHCP configuration
 dhcp-range=192.168.2.50,192.168.2.150,255.255.255.0,72h  # IP range and lease time
+
+# DNS configuration
 address=/#/192.168.2.1  # Resolve all domains to 192.168.2.1
+no-resolv            # Prevent using resolv file for upstream DNS servers
 
-# Prevent dnsmasq from using any resolv file for upstream DNS servers
-no-resolv
-
-# Enable logging
+# Logging
 log-queries
 log-facility=/var/log/dnsmasq.log
+```
 
-/etc/nginx/nginx.conf - 
+### Nginx Configuration
 
+Create or modify `/etc/nginx/nginx.conf`:
+
+```nginx
 user www-data;
 worker_processes auto;
 pid /run/nginx.pid;
 error_log /var/log/nginx/error.log;
-#load_module modules/ngx_stream_module.so;
+
 include /etc/nginx/modules-enabled/*.conf;
 
 events {
-        worker_connections 768;
-        # multi_accept on;
+    worker_connections 768;
 }
 
 http {
+    # Basic Settings
+    sendfile on;
+    tcp_nopush on;
+    types_hash_max_size 2048;
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
 
-        ##
-        # Basic Settings
-        ##
+    # SSL Settings
+    ssl_protocols TLSv1 TLSv1.1 TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
 
-        sendfile on;
-        tcp_nopush on;
-        types_hash_max_size 2048;
-        # server_tokens off;
+    # Logging
+    access_log /var/log/nginx/access.log;
 
-        # server_names_hash_bucket_size 64;
-        # server_name_in_redirect off;
+    # Gzip Settings
+    gzip on;
 
-        include /etc/nginx/mime.types;
-        default_type application/octet-stream;
-
-        ##
-        # SSL Settings
-        ##
-
-        ssl_protocols TLSv1 TLSv1.1 TLSv1.2 TLSv1.3; # Dropping SSLv3, ref: POODLE
-        ssl_prefer_server_ciphers on;
-
-        ##
-        # Logging Settings
-        ##
-
-        access_log /var/log/nginx/access.log;
-
-        ##
-        # Gzip Settings
-        ##
-
-        gzip on;
-
-        # gzip_vary on;
-        # gzip_proxied any;
-        # gzip_comp_level 6;
-        # gzip_buffers 16 8k;
-        # gzip_http_version 1.1;
-        # gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
-
-        ##
-        # Virtual Host Configs
-        ##
-
-        include /etc/nginx/conf.d/*.conf;
-        include /etc/nginx/sites-enabled/*;
+    # Virtual Host Configs
+    include /etc/nginx/conf.d/*.conf;
+    include /etc/nginx/sites-enabled/*;
 }
 
-
-#mail {
-#       # See sample authentication script at:
-#       # http://wiki.nginx.org/ImapAuthenticateWithApachePhpScript
-#
-#       # auth_http localhost/auth.php;
-#       # pop3_capabilities "TOP" "USER";
-#       # imap_capabilities "IMAP4rev1" "UIDPLUS";
-#
-#       server {
-#               listen     localhost:110;
-#               protocol   pop3;
-#               proxy      on;
-#       }
-#
-#       server {
-#               listen     localhost:143;
-#               protocol   imap;
-#               proxy      on;
-#       }
-#}
-
-
-# Stream block for TCP/UDP forwarding
+# Stream Configuration for HTTPS
 stream {
-    # Configuration for forwarding HTTPS traffic
     upstream dotnet_app_https {
         server localhost:5000;
     }
@@ -116,11 +84,39 @@ stream {
     server {
         listen 443;
         listen [::]:443;
-
         ssl_preread on;
         proxy_pass dotnet_app_https;
-
         proxy_connect_timeout 1s;
         proxy_timeout 3s;
     }
 }
+```
+
+## Setup Instructions
+
+1. Install required components:
+   - .NET Core
+   - nginx
+   - dnsmasq
+
+2. Place the configuration files in their respective locations:
+   - dnsmasq config: `/etc/dnsmasq.conf`
+   - nginx config: `/etc/nginx/nginx.conf`
+
+3. Start the services:
+   ```bash
+   sudo systemctl start dnsmasq
+   sudo systemctl start nginx
+   dotnet run  # In the application directory
+   ```
+
+## License
+
+[Add your license information here]
+
+## Contributing
+
+[Add contribution guidelines here]
+
+---
+For issues or feature requests, please [open an issue](link-to-your-repo/issues).
