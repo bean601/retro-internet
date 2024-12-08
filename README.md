@@ -109,14 +109,3 @@ stream {
    sudo systemctl start nginx
    dotnet run  # In the application directory
    ```
-
-## License
-
-[Add your license information here]
-
-## Contributing
-
-[Add contribution guidelines here]
-
----
-For issues or feature requests, please [open an issue](link-to-your-repo/issues).
