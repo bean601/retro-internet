@@ -2,11 +2,11 @@
 
 Ever wondered what the internet was like in 1999? Wonder no more!
 
-A .NET Core web application that dynamically rewrites archive.org HTML pages, providing a nostalgic browsing experience.
+This is a .NET Core web application that dynamically rewrites archive.org HTML pages, giving you that nostalgic dial-up browsing experience.
 
 ## Overview
 
-This project runs as a .NET Core web application under nginx on port 5000, with DNS manipulation handled by dnsmasq to create a contained retro browsing environment.
+This project runs as a .NET Core web application under nginx on port 5000, with DNS manipulation handled by dnsmasq for a contained retro browsing environment.
 
 ## System Components
 
