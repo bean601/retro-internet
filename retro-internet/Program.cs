@@ -12,9 +12,9 @@ bool _greenLEDOn = false;
 bool _redLEDOn = false;
 int _errorPin = 17;
 int _successPin = 27;
-var _imageCache = new MemoryCache(new MemoryCacheOptions() { SizeLimit = 200 });
-var _htmlCache = new MemoryCache(new MemoryCacheOptions() { SizeLimit = 200 });
-var _badResultsCache = new MemoryCache(new MemoryCacheOptions() { SizeLimit = 50 });
+var _imageCache = new MemoryCache(new MemoryCacheOptions() { });
+var _htmlCache = new MemoryCache(new MemoryCacheOptions() { });
+var _badResultsCache = new MemoryCache(new MemoryCacheOptions() { });
 
 ///
 /// Main method that accepts a url path, pulls the mapped snapshot from Archive.org, strips out the header and footer content, rewrites the urls and image src's to look
@@ -82,6 +82,8 @@ async Task<IResult> ProxyWaybackPage(HttpContext context, string path, HttpClien
 
         if (IsImageUrl(path) && _imageCache.TryGetValue(path, out string imageArchiveUrl))
         {
+            WriteDebugMessage($"Found image cache path for - {path}, archive url - {imageArchiveUrl}", sw);
+
             var imgResponse = await httpClient.GetAsync(imageArchiveUrl);
             if (!imgResponse.IsSuccessStatusCode)
             {
@@ -96,6 +98,8 @@ async Task<IResult> ProxyWaybackPage(HttpContext context, string path, HttpClien
             }
             else
             {
+                WriteDebugMessage($"Loaded image cache for - {path}, archive url - {imageArchiveUrl}", sw);
+
                 var imageData = await imgResponse.Content.ReadAsByteArrayAsync();
 
                 // Return the image data with the correct content type
@@ -103,6 +107,10 @@ async Task<IResult> ProxyWaybackPage(HttpContext context, string path, HttpClien
                 var contentType = imgResponse.Content.Headers.ContentType?.MediaType ?? "image/png";
                 return Results.File(imageData, contentType);
             }
+        }
+        else
+        {
+            WriteDebugMessage($"FAILED to load image cache for - {path}", sw);
         }
 
         var url = string.Empty;
@@ -202,6 +210,8 @@ async Task<IResult> ProxyWaybackPage(HttpContext context, string path, HttpClien
         WriteDebugMessage($"URL - {url}, HTML REWRITE DONE, RETURNING DATA", sw);
 
         var returnString = new HtmlString(htmlDoc.DocumentNode.OuterHtml);
+
+        WriteDebugMessage($"URL - {url}, SAVING CACHE FOR - {context.Request.Host.Host}.{path}", sw);
 
         _htmlCache.Set($"{context.Request.Host.Host}.{path}", returnString);
 
