@@ -146,6 +146,18 @@ async Task<IResult> ProxyWaybackPage(HttpContext context, string path, HttpClien
             url = path;
         }
 
+        var cacheKey = $"{context.Request.Host.Host}.{path}";
+
+        if (_htmlCache.TryGetValue(cacheKey, out string html) && !string.IsNullOrEmpty(html))
+        {
+            WriteDebugMessage($"Cache hit for URL - {url} / PATH - {path}, LOADING...", sw);
+            return new HtmlString(html);
+        }
+        else
+        {
+            WriteDebugMessage($"Cache MISS for URL - {url} / PATH - {path}", sw);
+        }
+
         WriteDebugMessage($"URL - {url}, LOADING...", sw);
 
         var response = await httpClient.GetAsync(url);
@@ -213,7 +225,8 @@ async Task<IResult> ProxyWaybackPage(HttpContext context, string path, HttpClien
 
         WriteDebugMessage($"URL - {url}, SAVING CACHE FOR - {context.Request.Host.Host}.{path}", sw);
 
-        _htmlCache.Set($"{context.Request.Host.Host}.{path}", returnString);
+        _htmlCache.CreateEntry(cacheKey);
+        _htmlCache.Set(cacheKey, returnString);
 
         return returnString;
     }

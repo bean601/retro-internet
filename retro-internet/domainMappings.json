@@ -12,7 +12,7 @@
   {
     "Url": "davematthewsband.com",
     "ArchiveUrl": "https://web.archive.org/web/20000510094955/http://www.davematthewsband.com/default.asp",
-    "SkipRootPage": true
+    "SkipRootPage": false
   },
   {
     "Url": "msn.com",
@@ -21,8 +21,8 @@
   },
   {
     "Url": "microsoft.com",
-    "ArchiveUrl": "https://web.archive.org/web/19991013021617/",
-    "SkipRootPage": true
+    "ArchiveUrl": "https://web.archive.org/web/19990429034628/http://www.microsoft.com/",
+    "SkipRootPage": false
   },
   {
     "Url": "aol.com",
