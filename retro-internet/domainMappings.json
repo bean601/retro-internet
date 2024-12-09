@@ -1,1 +1,52 @@
-[{"Url":"yahoo.com","ArchiveUrl":"https://web.archive.org/web/19980705025730/","SkipRootPage":false},{"Url":"gamespot.com","ArchiveUrl":"https://web.archive.org/web/19991012194738/","SkipRootPage":false},{"Url":"davematthewsband.com","ArchiveUrl":"http://www.davematthewsband.com/index.asp","SkipRootPage":true},{"Url":"msn.com","ArchiveUrl":"https://web.archive.org/web/19991128100812/","SkipRootPage":false},{"Url":"microsoft.com","ArchiveUrl":"https://web.archive.org/web/19991013021617/","SkipRootPage":true},{"Url":"aol.com","ArchiveUrl":"https://web.archive.org/web/19991012151327/","SkipRootPage":false},{"Url":"ebay.com","ArchiveUrl":"https://web.archive.org/web/19990420081856/","SkipRootPage":false},{"Url":"cnet.com","ArchiveUrl":"https://web.archive.org/web/19991126082056/","SkipRootPage":false},{"Url":"ign.com","ArchiveUrl":"https://web.archive.org/web/19991106010657/","SkipRootPage":false},{"Url":"lycos.com","ArchiveUrl":"https://web.archive.org/web/19990427115220","SkipRootPage":false}]
+[
+  {
+    "Url": "yahoo.com",
+    "ArchiveUrl": "https://web.archive.org/web/19980705025730/",
+    "SkipRootPage": false
+  },
+  {
+    "Url": "gamespot.com",
+    "ArchiveUrl": "https://web.archive.org/web/19991012194738/",
+    "SkipRootPage": false
+  },
+  {
+    "Url": "davematthewsband.com",
+    "ArchiveUrl": "https://web.archive.org/web/19991122203409/http://www.davematthewsband.com/",
+    "SkipRootPage": true
+  },
+  {
+    "Url": "msn.com",
+    "ArchiveUrl": "https://web.archive.org/web/19991128100812/",
+    "SkipRootPage": false
+  },
+  {
+    "Url": "microsoft.com",
+    "ArchiveUrl": "https://web.archive.org/web/19991013021617/",
+    "SkipRootPage": true
+  },
+  {
+    "Url": "aol.com",
+    "ArchiveUrl": "https://web.archive.org/web/19991012151327/",
+    "SkipRootPage": false
+  },
+  {
+    "Url": "ebay.com",
+    "ArchiveUrl": "https://web.archive.org/web/19990420081856/",
+    "SkipRootPage": false
+  },
+  {
+    "Url": "cnet.com",
+    "ArchiveUrl": "https://web.archive.org/web/19991126082056/",
+    "SkipRootPage": false
+  },
+  {
+    "Url": "ign.com",
+    "ArchiveUrl": "https://web.archive.org/web/19991106010657/",
+    "SkipRootPage": false
+  },
+  {
+    "Url": "lycos.com",
+    "ArchiveUrl": "https://web.archive.org/web/19990427115220",
+    "SkipRootPage": false
+  }
+]
