@@ -6,3 +6,6 @@
 /retro-internet/bin/Debug/net6.0
 /retro-internet/obj
 *.user
+/retro-internet/.vs/ProjectEvaluation
+/retro-internet/bin
+/retro-internet/Properties/PublishProfiles

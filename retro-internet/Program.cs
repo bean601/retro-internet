@@ -12,13 +12,23 @@ bool _greenLEDOn = false;
 bool _redLEDOn = false;
 int _errorPin = 17;
 int _successPin = 27;
-var _imageCache = new MemoryCache(new MemoryCacheOptions() { });
-var _htmlCache = new MemoryCache(new MemoryCacheOptions() { });
-var _badResultsCache = new MemoryCache(new MemoryCacheOptions() { });
+var _imageCache = new MemoryCache(new MemoryCacheOptions() { SizeLimit = 200 });
+var _htmlCache = new MemoryCache(new MemoryCacheOptions() { SizeLimit = 200 });
+var _badResultsCache = new MemoryCache(new MemoryCacheOptions() { SizeLimit = 50 });
 
+///
+/// Main method that accepts a url path, pulls the mapped snapshot from Archive.org, strips out the header and footer content, rewrites the urls and image src's to look
+/// like they're coming from the original domain. Then returns all of this. When the user clicks a link on the rendered html, we do the lookups to match to the snapshot
+/// Support image caching, html caching, and blinking Raspberry PI GPIO LEDs (if we're running on a pi)
+///
 async Task<IResult> ProxyWaybackPage(HttpContext context, string path, HttpClient httpClient, Dictionary<string, (string Url, bool DefaultRouteDefined)> domainMappings)
 {
     path = path.ToLower();
+
+    if (path.EndsWith(".txt"))
+    {
+        return Results.BadRequest();
+    }
 
     bool skipMapping = false;
 
@@ -228,6 +238,14 @@ async Task<IResult> ProxyWaybackPage(HttpContext context, string path, HttpClien
         sw.Stop();
     }
 }
+
+static bool IsRunningOnPi()
+{
+    return RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Linux)
+        && File.Exists("/proc/cpuinfo")
+        && File.ReadAllText("/proc/cpuinfo").Contains("Raspberry Pi");
+}
+
 static string GetDomainFromUrl(string url)
 {
     // Add protocol if missing. This helps Uri parse the URL correctly in all cases.
@@ -282,68 +300,77 @@ bool IsImageUrl(string url)
 
 async Task BlinkLedAsync(GpioController controller, Speed blinkSpeed, CancellationToken cancellationToken, bool isError = false)
 {
-    if (controller != null && RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+    try
     {
-        bool ledState = isError ? _redLEDOn : _greenLEDOn;
-        var pin = isError ? _errorPin : _successPin;
 
-        var blinkSpeedMilliseconds = 100;
-
-        switch (blinkSpeed)
+        if (controller != null && IsRunningOnPi())
         {
-            case Speed.Slow:
-                blinkSpeedMilliseconds = 1000;
-                break;
-            case Speed.Medium:
-                blinkSpeedMilliseconds = 500;
-                break;
-            case Speed.Fast:
-                blinkSpeedMilliseconds = 100;
-                break;
-            default:
-                break;
-        }
+            bool ledState = isError ? _redLEDOn : _greenLEDOn;
+            var pin = isError ? _errorPin : _successPin;
 
-        var sw = new Stopwatch();
-        sw.Start();
+            var blinkSpeedMilliseconds = 100;
 
-        while (sw.ElapsedMilliseconds < blinkSpeedMilliseconds) // Replace with a condition to stop blinking as needed
-        {
-            if (!cancellationToken.IsCancellationRequested)
+            switch (blinkSpeed)
             {
-                //WriteDebugMessage($"toggling pin {pin} to {ledState}", null);
-                controller.Write(pin, ledState ? PinValue.High : PinValue.Low);
-                ledState = !ledState;
+                case Speed.Slow:
+                    blinkSpeedMilliseconds = 1000;
+                    break;
+                case Speed.Medium:
+                    blinkSpeedMilliseconds = 500;
+                    break;
+                case Speed.Fast:
+                    blinkSpeedMilliseconds = 100;
+                    break;
+                default:
+                    break;
+            }
 
-                if (isError)
+            var sw = new Stopwatch();
+            sw.Start();
+
+            while (sw.ElapsedMilliseconds < blinkSpeedMilliseconds) // Replace with a condition to stop blinking as needed
+            {
+                if (!cancellationToken.IsCancellationRequested)
                 {
-                    _redLEDOn = ledState;
+                    //WriteDebugMessage($"toggling pin {pin} to {ledState}", null);
+                    controller.Write(pin, ledState ? PinValue.High : PinValue.Low);
+                    ledState = !ledState;
+
+                    if (isError)
+                    {
+                        _redLEDOn = ledState;
+                    }
+                    else
+                    {
+                        _greenLEDOn = ledState;
+                    }
+
+                    // Wait for the interval asynchronously
+                    await Task.Delay(blinkSpeedMilliseconds / 100);
                 }
                 else
                 {
-                    _greenLEDOn = ledState;
+                    return;
                 }
+            }
 
-                // Wait for the interval asynchronously
-                await Task.Delay(blinkSpeedMilliseconds / 100);
-            }
-            else
-            {
-                return;
-            }
+            sw.Stop();
         }
-
-        sw.Stop();
     }
+    catch { }
 }
 
 void TurnOffBothLedsAsync(GpioController controller)
 {
-    if (controller != null && RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+    try
     {
-        controller.Write(_errorPin, PinValue.Low);
-        controller.Write(_successPin, PinValue.Low);
+        if (controller != null && IsRunningOnPi())
+        {
+            controller.Write(_errorPin, PinValue.Low);
+            controller.Write(_successPin, PinValue.Low);
+        }
     }
+    catch { }
 }
 
 static void WriteDebugMessage(string stringToPrint, Stopwatch stopwatch = null)
@@ -371,11 +398,27 @@ static void WriteDebugMessage(string stringToPrint, Stopwatch stopwatch = null)
 var mappingFilePath = "domainMappings.json";
 
 var builder = WebApplication.CreateBuilder(args);
+
+//open it up
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll",
+        builder =>
+        {
+            builder
+            .AllowAnyOrigin()
+            .AllowAnyMethod()
+            .AllowAnyHeader();
+        });
+});
+
 var app = builder.Build();
 
 var httpClient = new HttpClient();
 
 var domainMappings = GetDomainMappings(mappingFilePath);
+
+app.UseCors("AllowAll");
 
 foreach (var entry in domainMappings)
 {
@@ -484,53 +527,4 @@ static Dictionary<string, (string, bool SkipRootPage)> GetDomainMappings(string 
     var domainMappings = JsonSerializer.Deserialize<List<WebEntry>>(json)
         .ToDictionary(item => item.Url.ToLower(), item => (item.ArchiveUrl.ToLower(), item.SkipRootPage));
     return domainMappings;
-}
-
-public enum Speed
-{
-    Slow = 1,
-    Medium = 2,
-    Fast = 3
-}
-
-public class ImageCache
-{
-    public byte[] Content;
-    public string ContentType;
-}
-
-public class GPIOAbstraction
-{
-    GpioController gpioController = null;
-
-    public GpioController Controller
-    {
-        get
-        {
-            if (gpioController == null && RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            {
-                gpioController = new GpioController();
-                return gpioController;
-            }
-            else
-            {
-                return null;
-            }
-        }
-    }
-}
-
-public class HtmlString : IResult
-{
-    private readonly string _htmlContent;
-    public HtmlString(string htmlContent)
-    {
-        _htmlContent = htmlContent;
-    }
-
-    public async Task ExecuteAsync(HttpContext httpContext)
-    {
-        httpContext.Response.ContentType = "text/html";
-        await httpContext.Response.WriteAsync(_htmlContent);
-    }
 }
